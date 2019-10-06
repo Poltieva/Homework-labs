@@ -1,0 +1,4 @@
+#!C:\Users\user\Desktop\Навчання\Programs\3_course_1_sem\venv\Scripts\python.exe
+import sys
+from pymorphy2 import cli
+sys.exit(cli.main())
