@@ -1,6 +1,7 @@
 import pymorphy2
 import sqlite3
 import tokenize_uk
+from string import Template
 
 morph_analyzer = pymorphy2.MorphAnalyzer(lang='uk')
 
@@ -31,12 +32,14 @@ cursor.execute("""CREATE TABLE lemmas
 word_forms = {}
 count = 1
 for index, sentence in enumerate(sentences):
-    command = "INSERT INTO sentences VALUES (" + str(index+1) + ', "' + str(sentence) + '");'
+    t = Template('INSERT INTO sentences VALUES ($index , "$sentence");')
+    command = t.substitute(index=index + 1, sentence=sentence)
     cursor.execute(command)
     tokens = tokenize_uk.tokenize_words(sentence)
     for token in tokens:
         if token.isalpha():
-            command = "INSERT INTO morphs VALUES (" + str(count) + ', "' + str(token) + '");'
+            t = Template('INSERT INTO morphs VALUES ($count, "$token");')
+            command = t.substitute(count=count, token=token)
             cursor.execute(command)
             count += 1
             if token not in word_forms.keys():
@@ -47,8 +50,8 @@ for index, sentence in enumerate(sentences):
 lemmas = {}
 for word_form, num_of_ocurrences in word_forms.items():
     lemma = morph_analyzer.parse(word_form)[0].normal_form
-    command = 'INSERT INTO word_forms VALUES ("' + str(word_form) + '" , "' +\
-              str(lemma) + '", ' + str(num_of_ocurrences) + ");"
+    t = Template('INSERT INTO word_forms VALUES ("$word_form", "$lemma", $num);')
+    command = t.substitute(word_form=word_form, lemma=lemma, num=num_of_ocurrences)
     cursor.execute(command)
 
     if lemma not in lemmas.keys():
