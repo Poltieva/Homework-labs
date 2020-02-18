@@ -1,52 +1,47 @@
+# Корпус 156 481‬ слів, 11 339 речень
+
 import pymorphy2
+import os
+import docx2txt
 import sqlite3
 import tokenize_uk
 from string import Template
+import time
 
-morph_analyzer = pymorphy2.MorphAnalyzer(lang='uk')
-
-with open('C:/Users/user/Desktop/Навчання/Тексти/Holubyi_olen.txt', 'r') as file:
-    text = file.read()
-sentences = tokenize_uk.tokenize_sents(text)
+start = time.time()
+texts = []
+with os.scandir('C:/Users/user/Desktop/Навчання/Тексти/') as entries:
+    for entry in entries:
+        text = docx2txt.process("C:/Users/user/Desktop/Навчання/Тексти/" + entry.name)
+        sentences = tokenize_uk.tokenize_sents(text)
+        texts.append(sentences)
 
 db = sqlite3.connect('dictionary.db')
 cursor = db.cursor()
-cursor.execute("""DROP TABLE sentences;""")
-cursor.execute("""DROP TABLE morphs;""")
-cursor.execute("""DROP TABLE word_forms;""")
-cursor.execute("""DROP TABLE lemmas;""")
-cursor.execute("""CREATE TABLE sentences
-           (index_of_sent INTEGER PRIMARY KEY,
-           sentence VARCHAR(100) NOT NULL);""")
-cursor.execute("""CREATE TABLE morphs
-           (position_in_text INTEGER PRIMARY KEY,
-           morph VARCHAR(20) NOT NULL);""")
-cursor.execute("""CREATE TABLE word_forms 
-                (word_form VARCHAR(20) PRIMARY KEY,
-                lemma VARCHAR(20) NOT NULL,
-                num_of_ocurrences INTEGER NOT NULL);""")
-cursor.execute("""CREATE TABLE lemmas
-                (lemma VARCHAR(20) PRIMARY KEY NOT NULL,
-                num_of_ocurrences INTEGER NOT NULL);""")
 
 word_forms = {}
 count = 1
-for index, sentence in enumerate(sentences):
-    t = Template('INSERT INTO sentences VALUES ($index , "$sentence");')
-    command = t.substitute(index=index + 1, sentence=sentence)
-    cursor.execute(command)
-    tokens = tokenize_uk.tokenize_words(sentence)
-    for token in tokens:
-        if token.isalpha():
-            t = Template('INSERT INTO morphs VALUES ($count, "$token");')
-            command = t.substitute(count=count, token=token)
-            cursor.execute(command)
-            count += 1
-            if token not in word_forms.keys():
-                word_forms[token] = 1
-            else:
-                word_forms[token] += 1
+index = 1
+for sents in texts:
+    for sentence in sents:
+        sentence = sentence.replace("\n", " ").replace("\"", "")
+        t = Template('INSERT INTO sentences VALUES ($index_of_sent , "$sentence");')
+        command = t.substitute(index_of_sent=index, sentence=sentence)
+        cursor.execute(command)
+        index += 1
+        tokens = tokenize_uk.tokenize_words(sentence)
+        for token in tokens:
+            if token.isalnum():
+                t = Template('INSERT INTO morphs VALUES ($count, "$token", $index_of_sent);')
+                command = t.substitute(count=count, token=token, index_of_sent=index + 1)
+                cursor.execute(command)
+                count += 1
+                if token not in word_forms.keys():
+                    word_forms[token] = 1
+                else:
+                    word_forms[token] += 1
 
+morph_analyzer = pymorphy2.MorphAnalyzer(lang='uk')
 lemmas = {}
 for word_form, num_of_ocurrences in word_forms.items():
     lemma = morph_analyzer.parse(word_form)[0].normal_form
@@ -60,8 +55,11 @@ for word_form, num_of_ocurrences in word_forms.items():
         lemmas[lemma] += num_of_ocurrences
 
 for lemma, num_of_ocurrences in lemmas.items():
-    command = 'INSERT INTO lemmas VALUES ("' + lemma + '" ,' + str(num_of_ocurrences) + ");"
+    t = Template('INSERT INTO lemmas VALUES ("$lemma", "$num_of_ocurrences");')
+    command = t.substitute(lemma=lemma, num_of_ocurrences=num_of_ocurrences)
     cursor.execute(command)
 
 db.commit()
 db.close()
+end = time.time()
+print("Process finished in", end - start, "seconds")
